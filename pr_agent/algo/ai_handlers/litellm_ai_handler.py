@@ -8,7 +8,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt
 
 from pr_agent.algo import NO_SUPPORT_TEMPERATURE_MODELS, SUPPORT_REASONING_EFFORT_MODELS, USER_MESSAGE_ONLY_MODELS
 from pr_agent.algo.ai_handlers.base_ai_handler import BaseAiHandler
-from pr_agent.algo.utils import ReasoningEffort, get_version
+from pr_agent.algo.utils import ReasoningEffort, get_version, get_max_tokens
 from pr_agent.config_loader import get_settings
 from pr_agent.log import get_logger
 import json
@@ -29,6 +29,7 @@ class LiteLLMAIHandler(BaseAiHandler):
         Raises a ValueError if the OpenAI key is missing.
         """
         self.azure = False
+        self.ollama = False
         self.api_base = None
         self.repetition_penalty = None
         if get_settings().get("OPENAI.KEY", None):
@@ -80,6 +81,7 @@ class LiteLLMAIHandler(BaseAiHandler):
         if get_settings().get("OLLAMA.API_BASE", None):
             litellm.api_base = get_settings().ollama.api_base
             self.api_base = get_settings().ollama.api_base
+            self.ollama = True
         if get_settings().get("HUGGINGFACE.REPETITION_PENALTY", None):
             self.repetition_penalty = float(get_settings().huggingface.repetition_penalty)
         if get_settings().get("VERTEXAI.VERTEX_PROJECT", None):
@@ -229,6 +231,12 @@ class LiteLLMAIHandler(BaseAiHandler):
                     "timeout": get_settings().config.ai_timeout,
                     "api_base": self.api_base,
                 }
+
+            # Add max tokens for Ollama
+            if self.ollama:
+                max_tokens = get_max_tokens(model)
+                get_logger().info(f"Set max tokens to {max_tokens}.")
+                kwargs["num_ctx"] = max_tokens
 
             # Add temperature only if model supports it
             if model not in self.no_support_temperature_models and not get_settings().config.custom_reasoning_model:
